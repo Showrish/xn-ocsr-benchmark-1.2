@@ -1,0 +1,5 @@
+# Base environment: runs run_pipeline.py and scripts/setup_external.py.
+# Each tool runs in its own environment, defined in envs/ (see README).
+pyyaml>=6.0
+gdown>=5.1
+huggingface_hub>=0.23

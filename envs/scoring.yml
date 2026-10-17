@@ -1,0 +1,11 @@
+# Scoring environment. RDKit is pinned to the version used in the Module 1
+# benchmark so canonical SMILES match the ground truth exactly.
+name: xn-scoring
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - rdkit=2026.03.2
+  - pandas
+  - pyyaml
+  - pytest

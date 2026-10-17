@@ -1,0 +1,83 @@
+# Benchmark configuration.
+# Every path is relative to the repo root unless written as an absolute path.
+# Environment variables such as $HOME are expanded. API credentials are NOT stored
+# here. They come from environment variables (see .env.example).
+
+paths:
+  # Course dataset from Canvas (Dataset.zip): 1.pdf, 2.pdf, 4.pdf, 6.pdf, 16.pdf, 19.pdf
+  course_papers_dir: data/course_papers
+  ground_truth_csv: data/course_papers/ground_truth_SMILES_confirmed_1,2,4,6,16,19.csv
+
+  # DECIMER crops of the six papers, produced by teammate Jirapa Bangvak (role A)
+  decimer_crops_dir: data/decimer_crops
+
+  # BioMiner is cloned here by scripts/setup_external.py
+  biominer_repo_dir: external/BioMiner
+
+  # BioVista subset: the open-access BioVista papers shipped with BioMiner,
+  # plus any other BioVista papers you add to this folder
+  biovista_pdfs_dir: external/BioMiner/example/pdfs
+
+  # Public BioVista OCSR set (molecule images + correct SMILES), unpacked by
+  # scripts/setup_external.py together with the other BioVista files
+  biovista_ocsr_dir: external/BioMiner/BioVista/ocsr
+
+  # Teammate Jirapa Bangvak's public DECIMER results on the same BioVista sample,
+  # copied here by scripts/setup_external.py --steps teammate. Used to benchmark
+  # the exact same images and compare DECIMER and MolScribe side by side.
+  teammate_dir: data/teammate
+
+  # All outputs (predictions, metrics, logs) are written here
+  results_dir: results
+
+# Course papers to benchmark (IDs match the PDF names and the ground truth file)
+papers: [1, 2, 4, 6, 16, 19]
+
+# How each step is launched. Each tool runs in its own environment, as planned
+# in the 1.1 setup proposal, because their dependencies conflict.
+environments:
+  molscribe: [conda, run, --no-capture-output, -n, xn-molscribe, python]
+  biominer: [conda, run, --no-capture-output, -n, BioMiner, python]
+  scoring: [conda, run, --no-capture-output, -n, xn-scoring, python]
+
+# Public BioVista OCSR benchmark: same sample size and seed as Jirapa's DECIMER run
+biovista_ocsr:
+  labels_file: labels/gd_SMIELS.csv  # file name as distributed by BioVista
+  id_column: ""      # leave empty to auto-detect the image column
+  smiles_column: ""  # leave empty to auto-detect the SMILES column
+  n_samples: 100
+  seed: 42
+  # If this file exists, its sample_id column fixes the sample to the exact images
+  # Jirapa used. Otherwise a seeded random sample of n_samples is drawn.
+  sample_ids_file: data/teammate/decimer_per_image_n100_seed42.csv
+
+teammate:
+  decimer_repo: https://github.com/JirapaB/xn-benchmark.git
+  files: [predictions_decimer.csv, decimer_per_image_n100_seed42.csv]
+
+crops:
+  # Optional CSV with columns paper_id, page, crop_id, image_path. Leave empty to
+  # read crops straight from decimer_crops_dir instead.
+  manifest_csv: ""
+  # Regex used on each crop's path (relative to decimer_crops_dir) to recover the
+  # paper and page. Named groups: paper_id (required), page (optional).
+  # Matches names like paper19_page3_crop2.png, 19/page_3_2.png, or 19_p3_c2.png.
+  # If a path does not match, the parent folder name is used as the paper ID.
+  filename_pattern: '(?:paper[_-]?)?(?P<paper_id>\d+)\D+?(?:page[_-]?|p)(?P<page>\d+)'
+  extensions: [.png, .jpg, .jpeg]
+
+molscribe:
+  hf_repo: yujieq/MolScribe
+  checkpoint: swin_base_char_aux_1m680k.pth  # 1M PubChem + 680K USPTO training images
+  device: auto  # auto, cuda, or cpu
+
+biominer:
+  # BioMiner's own config for running with an API model. A filled copy with your
+  # credentials is written to a temp folder outside the repo at run time.
+  config_template: BioMiner/config/default_open_source.yaml
+  server_warmup_seconds: 120
+
+evaluation:
+  fingerprint_radius: 2
+  fingerprint_bits: 2048
+  near_miss_threshold: 0.85  # Tanimoto similarity that counts as a near miss

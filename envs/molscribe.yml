@@ -1,0 +1,14 @@
+# MolScribe environment. MolScribe pins older versions of its own dependencies,
+# so it stays separate from the scoring environment.
+name: xn-molscribe
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - pip:
+      - torch
+      - huggingface_hub
+      - pandas
+      - pyyaml
+      - git+https://github.com/thomas0809/MolScribe.git
