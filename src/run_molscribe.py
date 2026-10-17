@@ -71,9 +71,7 @@ def predict_image(model: MolScribe, image_path: Path) -> dict:
 def run_biovista_ocsr(model: MolScribe, config: dict) -> None:
     """Benchmark MolScribe on the BioVista OCSR sample and save one row per image."""
     paths, settings = config["paths"], config["biovista_ocsr"]
-    records = load_records(
-        paths["biovista_ocsr_dir"], settings["labels_file"], settings["id_column"], settings["smiles_column"]
-    )
+    records = load_records(paths["biovista_ocsr_dir"], settings["labels_file"], settings.get("smiles_column") or "smiles")
     sample_ids_file = resolve_path(settings["sample_ids_file"]) if settings.get("sample_ids_file") else None
     sample = select_sample(records, settings["n_samples"], settings["seed"], sample_ids_file)
 

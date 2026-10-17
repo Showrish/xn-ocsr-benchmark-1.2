@@ -1,5 +1,10 @@
 """Load the public BioVista OCSR set: cropped molecule images with their correct SMILES.
 
+Images are matched to their labels with the BioMiner authors' own rule, taken from
+BioVista/component_infernece/ocsr/molscribe_inference_batch.py in their repo: an image
+named <pdb_idx>_<pdb_name>_..._<page>-<index>.png belongs to the label row whose
+pdf_name is <pdb_idx>_<pdb_name> and whose index is <index>.
+
 The sample matches teammate Jirapa Bangvak's DECIMER benchmark (100 images, seed 42),
 so DECIMER and MolScribe are compared on identical images, as planned in our 1.1
 proposal. When her per-image file is present, its sample IDs fix the exact images.
@@ -8,7 +13,6 @@ proposal. When her per-image file is present, its sample IDs fix the exact image
 from __future__ import annotations
 
 import logging
-import re
 from pathlib import Path
 
 import pandas as pd
@@ -36,148 +40,88 @@ def _stem(value) -> str:
     return Path(str(value)).stem
 
 
-def _index_images(ocsr_dir: Path) -> dict[str, Path]:
-    """Every image under the OCSR folder, keyed by file name without extension."""
-    return {path.stem: path for path in sorted(ocsr_dir.rglob("*")) if path.suffix.lower() in IMAGE_SUFFIXES}
-
-
-def _best_id_column(labels: pd.DataFrame, smiles_column: str, images: dict[str, Path]) -> tuple[str | None, int]:
-    """The column whose values match the most image file names, and how many it matches."""
-    best_column, best_hits = None, 0
-    for column in labels.columns:
-        if column == smiles_column:
-            continue
-        hits = int(labels[column].map(_stem).isin(images).sum())
-        if hits > best_hits:
-            best_column, best_hits = column, hits
-    return best_column, best_hits
-
-
-def _images_by_row_number(n_rows: int, images: dict[str, Path]) -> list[Path] | None:
-    """Match rows to images named with a running number (e.g. 00012.png), counting from 0 or 1."""
-    numbered: dict[int, Path] = {}
-    for stem, path in images.items():
-        match = re.search(r"(\d+)(?!.*\d)", stem)  # last number in the file name
-        if match:
-            numbered.setdefault(int(match.group(1)), path)
-    for start in (0, 1):
-        mapped = [numbered.get(row + start) for row in range(n_rows)]
-        if all(mapped):
-            LOGGER.info("Matched images to label rows by their running number (starting at %d)", start)
-            return mapped
-    return None
-
-
-BIOVISTA_IMAGE_NAME = re.compile(r"^(?P<pdf>.+)_image_molminer_bbox_(?P<page>\d+)-(?P<box>\d+)$")
-MOLMINER_ID = re.compile(r"P(?P<page>\d+)-(?P<box>\d+)")
-
-
-def _images_by_biovista_name(labels: pd.DataFrame, images: dict[str, Path]) -> list[Path | None] | None:
-    """Match rows to BioVista's image names, built from the paper name and MolMiner box ID.
-
-    Images are named <pdf_name>_image_molminer_bbox_<page>-<box>, while the labels give
-    molminer_id as P<page>-<box>. The two may count pages and boxes from different
-    starting numbers, so every offset is tried and the one matching the most images wins.
-    """
-    if not {"pdf_name", "molminer_id"} <= set(labels.columns):
+def _image_key(stem: str) -> tuple[str, int] | None:
+    """(pdf_name, index) for a BioVista image name, using the authors' parsing rule."""
+    items = stem.split("_")
+    if len(items) < 3 or "-" not in items[-1]:
         return None
-    by_key = {}
-    for stem, path in images.items():
-        match = BIOVISTA_IMAGE_NAME.match(stem)
-        if match:
-            by_key[(match["pdf"], int(match["page"]), int(match["box"]))] = path
-    ids = labels["molminer_id"].astype(str).str.extract(MOLMINER_ID)
-
-    best_hits, best_paths, best_offsets = 0, None, None
-    for page_offset in (1, 0):
-        for box_offset in (1, 0):
-            paths = [
-                by_key.get((pdf, int(page) - page_offset, int(box) - box_offset)) if pd.notna(page) else None
-                for pdf, page, box in zip(labels["pdf_name"].astype(str), ids["page"], ids["box"])
-            ]
-            hits = sum(path is not None for path in paths)
-            if hits > best_hits:
-                best_hits, best_paths, best_offsets = hits, paths, (page_offset, box_offset)
-    if not best_hits:
-        return None
-    if best_hits < 0.9 * len(labels):
-        LOGGER.warning("Only %d of %d labels matched an image by name, so the sample will be smaller", best_hits, len(labels))
-    LOGGER.info(
-        "Matched %d of %d images by paper name and MolMiner ID (page offset %d, box offset %d)",
-        best_hits, len(labels), *best_offsets,
-    )
-    return best_paths
+    index = items[-1].split("-")[1]
+    return (f"{items[0]}_{items[1]}", int(index)) if index.isdigit() else None
 
 
-def load_records(ocsr_dir: Path, labels_file: str, id_column: str = "", smiles_column: str = "") -> pd.DataFrame:
-    """Return one row per labelled image: sample_id, row_index, smiles, group, image_path."""
+def load_records(ocsr_dir: Path, labels_file: str, smiles_column: str = "smiles") -> pd.DataFrame:
+    """Return one row per labelled image: sample_id, row_index, pdf_name, paper_index, smiles, group, image_path."""
     labels = pd.read_csv(ocsr_dir / labels_file)
-    images = _index_images(ocsr_dir)
+    missing_columns = {"pdf_name", "index", smiles_column} - set(labels.columns)
+    if missing_columns:
+        raise ValueError(f"BioVista labels are missing {sorted(missing_columns)}. Found: {list(labels.columns)}")
 
-    smiles_column = smiles_column or next((c for c in labels.columns if "smi" in str(c).lower()), "")
-    if not smiles_column:
-        raise ValueError(f"No SMILES column found in {list(labels.columns)}. Set biovista_ocsr.smiles_column.")
+    # Index every image by (pdf_name, index), exactly as the authors' script does
+    images = {}
+    for path in sorted(ocsr_dir.rglob("*")):
+        if path.suffix.lower() in IMAGE_SUFFIXES:
+            key = _image_key(path.stem)
+            if key is not None:
+                images[key] = path
 
-    records = pd.DataFrame({"row_index": range(len(labels)), "smiles": labels[smiles_column].astype(str)})
+    records = pd.DataFrame(
+        {
+            "row_index": range(len(labels)),
+            "pdf_name": labels["pdf_name"].astype(str),
+            "paper_index": labels["index"].astype(int),
+            "smiles": labels[smiles_column].astype(str),
+        }
+    )
+    records["image_path"] = [images.get(key) for key in zip(records["pdf_name"], records["paper_index"])]
 
-    # Keep BioVista's own identifiers, so every result can be traced back to its paper
-    for column in ("pdf_name", "molminer_id"):
-        if column in labels.columns:
-            records[column] = labels[column].astype(str)
-
-    # Strategy 1: BioVista's naming scheme (paper name + MolMiner box ID)
-    by_name = None if id_column else _images_by_biovista_name(labels, images)
-    # Strategy 2: a column that holds the image file names (or the one set in the config)
-    chosen, hits = (id_column, None) if id_column else _best_id_column(labels, smiles_column, images)
-    if by_name is not None:
-        records["image_path"] = by_name
-        records["sample_id"] = [path.stem if path is not None else None for path in by_name]
-    elif chosen and (hits is None or hits > 0):
-        records["sample_id"] = labels[chosen].map(_stem)
-        records["image_path"] = records["sample_id"].map(images)
-        LOGGER.info("Matched images through the '%s' column", chosen)
-    else:
-        # Strategy 3: images named by row number
-        by_row = _images_by_row_number(len(labels), images)
-        if by_row is None:
-            raise ValueError(
-                "Could not match BioVista labels to image files.\n"
-                f"  Label columns: {list(labels.columns)}\n"
-                f"  First label rows:\n{labels.head(3).to_string()}\n"
-                f"  Images found: {len(images)}, for example {list(images)[:5]}\n"
-                "Set biovista_ocsr.id_column in config/config.yaml, or send this message for a fix."
-            )
-        records["image_path"] = by_row
-        records["sample_id"] = [path.stem for path in by_row]
-
-    missing = records["image_path"].isna().sum()
+    missing = int(records["image_path"].isna().sum())
     if missing:
-        LOGGER.warning("%d labelled images were not found on disk and are skipped", missing)
+        LOGGER.warning("%d of %d labelled images were not found on disk and are skipped", missing, len(records))
     records = records.dropna(subset=["image_path"]).reset_index(drop=True)
     if records.empty:
-        raise ValueError(f"No BioVista images could be loaded from {ocsr_dir}")
+        raise ValueError(f"No BioVista images matched their labels in {ocsr_dir}")
+
+    records["sample_id"] = records["image_path"].map(lambda path: path.stem)
     records["group"] = records["smiles"].map(structure_group)
-    LOGGER.info("Loaded %d BioVista OCSR images", len(records))
+    LOGGER.info("Matched %d BioVista images to their labels", len(records))
     return records
+
+
+def id_aliases(table: pd.DataFrame) -> dict[str, str]:
+    """Every way another run might name an image, mapped to our sample_id.
+
+    Covers the image file name, the row number in the label file, and the
+    paper name plus index written with common separators.
+    """
+    aliases: dict[str, str] = {}
+    for row in table.itertuples(index=False):
+        sample_id = str(row.sample_id)
+        names = {sample_id, str(row.row_index)}
+        for separator in ("_", "-", ":", "/"):
+            names.add(f"{row.pdf_name}{separator}{row.paper_index}")
+        for name in names:
+            aliases.setdefault(name, sample_id)
+    return aliases
 
 
 def select_sample(records: pd.DataFrame, n_samples: int, seed: int, sample_ids_file: Path | None = None) -> pd.DataFrame:
     """Pick the benchmark sample. Uses the teammate's sample IDs when available."""
     if sample_ids_file and Path(sample_ids_file).exists():
-        teammate_ids = pd.read_csv(sample_ids_file, dtype={"sample_id": str})["sample_id"].map(_stem)
-        sample = records[records["sample_id"].isin(set(teammate_ids))]
-        if sample.empty and teammate_ids.str.isdigit().all():
-            # Her IDs may be row numbers in the label file rather than file names
-            sample = records[records["row_index"].isin({int(i) for i in teammate_ids})]
-        if not sample.empty:
+        teammate = pd.read_csv(sample_ids_file, dtype=str)
+        aliases = id_aliases(records)
+        wanted = {aliases.get(_stem(value)) for value in teammate["sample_id"]} - {None}
+        if wanted:
+            sample = records[records["sample_id"].isin(wanted)].reset_index(drop=True)
             LOGGER.info("Using the %d images from %s", len(sample), Path(sample_ids_file).name)
-            _check_teammate_answers(sample_ids_file, sample)
-            return sample.reset_index(drop=True)
+            _check_teammate_answers(teammate, sample, aliases)
+            return sample
         LOGGER.warning(
-            "No sample IDs from %s matched (for example %s), drawing a seeded sample instead",
+            "None of the sample IDs in %s matched (for example %s), drawing a seeded sample instead",
             Path(sample_ids_file).name,
-            list(teammate_ids[:3]),
+            list(teammate["sample_id"].head(3)),
         )
+    elif sample_ids_file:
+        LOGGER.warning("%s not found, drawing a seeded sample instead", sample_ids_file)
 
     if n_samples <= 0 or n_samples >= len(records):
         return records
@@ -185,9 +129,8 @@ def select_sample(records: pd.DataFrame, n_samples: int, seed: int, sample_ids_f
     return records.sample(n=n_samples, random_state=seed).reset_index(drop=True)
 
 
-def _check_teammate_answers(sample_ids_file: Path, sample: pd.DataFrame) -> None:
+def _check_teammate_answers(teammate: pd.DataFrame, sample: pd.DataFrame, aliases: dict[str, str]) -> None:
     """Confirm the teammate's images line up with ours by comparing the correct SMILES she recorded."""
-    teammate = pd.read_csv(sample_ids_file, dtype=str)
     truth_column = next(
         (c for c in teammate.columns
          if "smi" in c.lower() and any(word in c.lower() for word in ("true", "target", "gold", "label", "answer", "correct"))),
@@ -196,14 +139,13 @@ def _check_teammate_answers(sample_ids_file: Path, sample: pd.DataFrame) -> None
     if truth_column is None:
         LOGGER.info("Teammate file has no answer column, so the image match cannot be double-checked")
         return
-    recorded = dict(zip(teammate["sample_id"].map(_stem), teammate[truth_column]))
     ours = dict(zip(sample["sample_id"], sample["smiles"]))
-    ours.update(dict(zip(sample["row_index"].astype(str), sample["smiles"])))
-    agree = sum(1 for sid, smiles in recorded.items() if ours.get(sid) == smiles)
-    if agree < 0.9 * len(recorded):
+    pairs = [(aliases.get(_stem(sid)), smiles) for sid, smiles in zip(teammate["sample_id"], teammate[truth_column])]
+    agree = sum(1 for sid, smiles in pairs if sid is not None and ours.get(sid) == smiles)
+    if agree < 0.9 * len(pairs):
         LOGGER.warning(
             "Only %d of %d teammate answers match ours: the DECIMER comparison may not be on the same images",
-            agree, len(recorded),
+            agree, len(pairs),
         )
     else:
-        LOGGER.info("Checked against the teammate's answers: %d of %d match", agree, len(recorded))
+        LOGGER.info("Checked against the teammate's answers: %d of %d match", agree, len(pairs))

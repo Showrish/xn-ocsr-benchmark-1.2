@@ -24,6 +24,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.biovista_ocsr import id_aliases
 from src.config import DEFAULT_CONFIG, load_config, setup_logging
 from src.data import load_ground_truth
 from src.metrics import TanimotoScorer, canonical_smiles, set_scores
@@ -101,10 +102,9 @@ def evaluate_images(results_dir: Path, teammate_dir: Path, scorer: TanimotoScore
     per_image_rows = []
     for predictions in load_image_predictions(results_dir, teammate_dir):
         tool = str(predictions["tool"].dropna().iloc[0])
-        if not predictions["sample_id"].isin(manifest["sample_id"]).any() and predictions["sample_id"].str.isdigit().all():
-            # IDs given as row numbers in the label file: translate them to our image IDs
-            row_to_id = dict(zip(manifest["row_index"].astype(int).astype(str), manifest["sample_id"]))
-            predictions = predictions.assign(sample_id=predictions["sample_id"].map(row_to_id))
+        if not predictions["sample_id"].isin(manifest["sample_id"]).any():
+            # Another run may name images differently (row number, paper + index): translate to our IDs
+            predictions = predictions.assign(sample_id=predictions["sample_id"].map(id_aliases(manifest)))
         merged = manifest.merge(predictions[["sample_id", "predicted_smiles", "runtime_sec"]], on="sample_id", how="left")
         if merged["predicted_smiles"].notna().sum() == 0:
             LOGGER.warning("%s has no predictions for the sampled images, skipping it", tool)
