@@ -94,6 +94,9 @@ def evaluate_images(results_dir: Path, teammate_dir: Path, scorer: TanimotoScore
         LOGGER.info("No BioVista OCSR sample found, skipping the image evaluation")
         return None
     manifest = pd.read_csv(manifest_path, dtype={"sample_id": str})
+    if manifest.empty:
+        LOGGER.warning("The BioVista sample is empty, skipping the image evaluation")
+        return None
 
     per_image_rows = []
     for predictions in load_image_predictions(results_dir, teammate_dir):
@@ -121,6 +124,9 @@ def evaluate_images(results_dir: Path, teammate_dir: Path, scorer: TanimotoScore
             )
 
     per_image = pd.DataFrame(per_image_rows)
+    if per_image.empty:
+        LOGGER.warning("No tool has predictions for the BioVista sample, skipping the image evaluation")
+        return None
     by_group = pd.concat(
         [per_image.assign(group="all"), per_image], ignore_index=True
     ).groupby(["tool", "group"], as_index=False).agg(
