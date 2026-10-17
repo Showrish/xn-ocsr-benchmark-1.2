@@ -38,6 +38,9 @@ PUBLISHED_OCSR = {
     "DECIMER": {"all": 0.298, "full": 0.545, "chiral": 0.326, "markush": 0.000},
 }
 
+# One display name per tool, whatever capitalization a predictions file uses
+TOOL_NAMES = {"decimer": "DECIMER", "molscribe": "MolScribe", "biominer": "BioMiner"}
+
 COURSE_SUMMARY_METRICS = [
     "precision", "recall", "f1",
     "precision_no_stereo", "recall_no_stereo", "f1_no_stereo",
@@ -102,6 +105,7 @@ def evaluate_images(results_dir: Path, teammate_dir: Path, scorer: TanimotoScore
     per_image_rows = []
     for predictions in load_image_predictions(results_dir, teammate_dir):
         tool = str(predictions["tool"].dropna().iloc[0])
+        tool = TOOL_NAMES.get(tool.lower(), tool)
         if not predictions["sample_id"].isin(manifest["sample_id"]).any():
             # Another run may name images differently (row number, paper + index): translate to our IDs
             predictions = predictions.assign(sample_id=predictions["sample_id"].map(id_aliases(manifest)))
