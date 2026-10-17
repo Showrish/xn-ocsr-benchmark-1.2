@@ -84,7 +84,7 @@ data/
 └── decimer_crops/               Crop images. File or folder names must include the paper ID
 ```
 
-`crops.filename_pattern` reads the paper and page from each crop's path. If the crops come with a manifest CSV (`paper_id, page, crop_id, image_path`), set `crops.manifest_csv` instead. For the BioVista OCSR labels, the image and SMILES columns are detected automatically and can be set in `biovista_ocsr` if needed.
+`crops.filename_pattern` reads the paper and page from each crop's path. If the crops come with a manifest CSV (`paper_id, page, crop_id, image_path`), set `crops.manifest_csv` instead. BioVista OCSR images are matched to their labels with the BioMiner authors' own rule, from `BioVista/component_infernece/ocsr/molscribe_inference_batch.py` in their repo: an image named `<paper>_..._<page>-<index>` belongs to the label row with that `pdf_name` and `index`. All 8,861 images match.
 
 ## Setup
 
@@ -178,7 +178,26 @@ The ground truth has 222 rows but 220 unique structures. In paper 4, compounds 4
 
 ## Results
 
-After a run, the headline tables are in [`results/summary.md`](results/summary.md), and every output file is described in [`results/README.md`](results/README.md).
+The headline tables are in [`results/summary.md`](results/summary.md), and every output file is described in [`results/README.md`](results/README.md).
+
+**Status for this submission:** Evaluation 1 (MolScribe on the BioVista OCSR sample, side by side with DECIMER) was run, and its outputs are in `results/`. Evaluations 2 and 3 are fully implemented but were not run for this submission: BioMiner's reasoning step needs an API key, and the DECIMER crops of the course papers were not available in time. Both run with `python run_pipeline.py` once the credentials and crops are in place.
+
+### Key results: BioVista OCSR images (100 images, seed 42)
+
+Exact match of canonical SMILES. Published values are the BioMiner README's results on all 8,861 images.
+
+| Group | Images | MolScribe | DECIMER | MolScribe, published | DECIMER, published |
+|---|---|---|---|---|---|
+| All | 100 | 0.460 | 0.300 | 0.455 | 0.298 |
+| Full | 38 | 0.789 | 0.526 | 0.703 | 0.545 |
+| Chiral | 19 | 0.474 | 0.526 | 0.481 | 0.326 |
+| Markush | 43 | 0.163 | 0.000 | 0.156 | 0.000 |
+
+- **The setup reproduces published results.** MolScribe's overall exact match (0.460) is within half a point of its published full-set value (0.455).
+- **The comparison is on identical images.** The DECIMER rows reproduce Jirapa's reported numbers exactly, including the group sizes of 38, 19, and 43, which confirms both runs used the same 100 images and the same scoring.
+- **MolScribe is ahead overall** (0.46 vs. 0.30), mostly on full structures (0.79 vs. 0.53) and Markush structures (0.16 vs. 0.00). DECIMER is slightly ahead on chiral structures (0.53 vs. 0.47), but that group has only 19 images.
+- **Some errors are stereochemistry only.** Ignoring stereochemistry raises MolScribe from 0.46 to 0.50. MolScribe returned a valid SMILES for 94% of images.
+- **Timings are not comparable across tools.** MolScribe ran on a Colab L4 GPU (about 0.9 seconds per image) and DECIMER on a CPU in Jirapa's run (about 5.1 seconds per image).
 
 ## Limitations
 

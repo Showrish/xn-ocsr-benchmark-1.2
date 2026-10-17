@@ -7,7 +7,7 @@ Raw BioMiner outputs (`results/raw/`) stay out of git because they include figur
 
 | File | What it contains |
 |---|---|
-| `sample_manifest.csv` | The exact images benchmarked: `sample_id`, correct `smiles`, `group`, image file name |
+| `sample_manifest.csv` | The exact images benchmarked: `sample_id`, the BioVista paper (`pdf_name`, `paper_index`), correct `smiles`, `group`, and image file name |
 | `predictions_molscribe.csv` | One row per image: `sample_id`, `group`, `tool`, `predicted_smiles`, `confidence`, `runtime_sec`, `error` |
 | `metrics_per_image.csv` | Every tool's score on every image: exact match, exact match without stereo, validity, Tanimoto |
 | `metrics_by_group.csv` | Per tool and group (all, full, chiral, markush), next to the published BioVista values |
