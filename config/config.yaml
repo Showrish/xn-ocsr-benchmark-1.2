@@ -43,8 +43,9 @@ environments:
 # Public BioVista OCSR benchmark: same sample size and seed as Jirapa's DECIMER run
 biovista_ocsr:
   labels_file: labels/gd_SMIELS.csv  # file name as distributed by BioVista
-  id_column: ""      # leave empty to auto-detect the image column
-  smiles_column: ""  # leave empty to auto-detect the SMILES column
+  smiles_column: smiles
+  # Images are matched to labels by paper name and index, using the BioMiner
+  # authors' own rule (see src/biovista_ocsr.py)
   n_samples: 100
   seed: 42
   # If this file exists, its sample_id column fixes the sample to the exact images
