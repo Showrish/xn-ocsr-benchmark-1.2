@@ -90,7 +90,8 @@ def run_biovista_ocsr(model: MolScribe, config: dict) -> None:
     sample.assign(image_file=sample["image_path"].map(lambda p: Path(p).name)).drop(columns="image_path").to_csv(
         output_dir / "sample_manifest.csv", index=False
     )
-    pd.DataFrame(rows).to_csv(output_dir / "predictions_molscribe.csv", index=False)
+    columns = ["sample_id", "group", "tool", "predicted_smiles", "confidence", "runtime_sec", "error"]
+    pd.DataFrame(rows, columns=columns).to_csv(output_dir / "predictions_molscribe.csv", index=False)
     LOGGER.info("Saved %d predictions to %s", len(rows), output_dir / "predictions_molscribe.csv")
 
 

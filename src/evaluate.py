@@ -74,7 +74,13 @@ def load_image_predictions(results_dir: Path, teammate_dir: Path) -> list[pd.Dat
         files.append(teammate_file)
     tables = []
     for path in files:
-        table = pd.read_csv(path)
+        try:
+            table = pd.read_csv(path, dtype={"sample_id": str})
+        except pd.errors.EmptyDataError:
+            table = pd.DataFrame()
+        if table.empty:
+            LOGGER.warning("%s is empty, skipping it", path.name)
+            continue
         table["sample_id"] = table["sample_id"].astype(str).map(lambda value: Path(value).stem)
         tables.append(table)
         LOGGER.info("Loaded %s (%d rows)", path.name, len(table))
@@ -92,6 +98,10 @@ def evaluate_images(results_dir: Path, teammate_dir: Path, scorer: TanimotoScore
     per_image_rows = []
     for predictions in load_image_predictions(results_dir, teammate_dir):
         tool = str(predictions["tool"].dropna().iloc[0])
+        if not predictions["sample_id"].isin(manifest["sample_id"]).any() and predictions["sample_id"].str.isdigit().all():
+            # IDs given as row numbers in the label file: translate them to our image IDs
+            row_to_id = dict(zip(manifest["row_index"].astype(int).astype(str), manifest["sample_id"]))
+            predictions = predictions.assign(sample_id=predictions["sample_id"].map(row_to_id))
         merged = manifest.merge(predictions[["sample_id", "predicted_smiles", "runtime_sec"]], on="sample_id", how="left")
         if merged["predicted_smiles"].notna().sum() == 0:
             LOGGER.warning("%s has no predictions for the sampled images, skipping it", tool)
