@@ -34,7 +34,7 @@ One command runs every step: `python run_pipeline.py`.
 ## Repository layout
 
 ```
-xn-ocsr-benchmark/
+xn-ocsr-benchmark-1.2/
 ├── run_pipeline.py              Entry point. Runs every step end to end, each in its own environment
 ├── config/
 │   └── config.yaml              All paths and settings (nothing is hardcoded in the code)
@@ -90,13 +90,13 @@ data/
 
 ### Option A: Google Colab (recommended)
 
-Open `notebooks/run_on_colab.ipynb` in Colab with a GPU runtime (L4 or A100), set `REPO_URL` and `DATA_DIR` in the settings cell, add the four API secrets, and run the cells in order. The notebook installs conda, creates the three environments, exports their exact versions to `envs/lock/`, runs the tests, runs the pipeline, and packages the results.
+Open `notebooks/run_on_colab.ipynb` in Colab with a GPU runtime (L4 or A100), set `DATA_DIR` in the settings cell, add the four API secrets, and run the cells in order. The notebook installs conda, creates the three environments, exports their exact versions to `envs/lock/`, runs the tests, runs the pipeline, and packages the results.
 
 ### Option B: Local machine with conda and an NVIDIA GPU
 
 ```bash
-git clone https://github.com/<your-username>/xn-ocsr-benchmark.git
-cd xn-ocsr-benchmark
+git clone https://github.com/Showrish/xn-ocsr-benchmark-1.2.git
+cd xn-ocsr-benchmark-1.2
 
 pip install -r requirements.txt
 python scripts/setup_external.py                 # BioMiner, BioVista data, weights, teammate results
