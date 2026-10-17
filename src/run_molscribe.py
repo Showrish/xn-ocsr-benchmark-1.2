@@ -14,13 +14,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import time
 from pathlib import Path
 
 import pandas as pd
 import torch
 from huggingface_hub import hf_hub_download
-from molscribe import MolScribe
 
 from src import EXTRA_COLUMNS, PREDICTION_COLUMNS
 from src.biovista_ocsr import load_records, select_sample
@@ -40,6 +40,12 @@ def pick_device(setting: str) -> torch.device:
 
 def load_model(hf_repo: str, checkpoint: str, device: torch.device) -> MolScribe:
     """Download the pretrained checkpoint from Hugging Face (cached after the first run)."""
+    # MolScribe imports matplotlib when it loads. Notebooks such as Colab set a
+    # notebook-only plotting backend that this environment does not have, which
+    # breaks that import, so switch to the headless backend first.
+    os.environ["MPLBACKEND"] = "Agg"
+    from molscribe import MolScribe
+
     checkpoint_path = hf_hub_download(repo_id=hf_repo, filename=checkpoint)
     LOGGER.info("Loaded checkpoint %s on %s", checkpoint, device)
     return MolScribe(checkpoint_path, device=device)
