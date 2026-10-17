@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import subprocess
 import sys
 
@@ -42,7 +43,10 @@ def run_step(step: str, config: dict, config_path: str) -> bool:
     environment, module_args = STEPS[step]
     command = list(config["environments"][environment]) + module_args + ["--config", config_path]
     LOGGER.info("Starting step '%s': %s", step, " ".join(command))
-    completed = subprocess.run(command, cwd=REPO_ROOT)
+    # No step displays plots. Notebooks like Colab set a notebook-only matplotlib
+    # backend that the tool environments lack, so steps use the headless one.
+    step_env = {**os.environ, "MPLBACKEND": "Agg"}
+    completed = subprocess.run(command, cwd=REPO_ROOT, env=step_env)
     if completed.returncode == 0:
         LOGGER.info("Step '%s' finished", step)
         return True
