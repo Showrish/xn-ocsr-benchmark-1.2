@@ -1,0 +1,9 @@
+data/
+*.pdf
+external/
+.env
+results/raw/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.pytest_cache/
