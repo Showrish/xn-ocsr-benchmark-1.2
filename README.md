@@ -16,6 +16,17 @@ It follows the plan in our group's 1.1 setup proposal, where I own MolScribe and
 | 2. Course papers | The six course PDFs and their ground truth (220 unique structures) | BioMiner end to end, and MolScribe on the DECIMER crops | Performance on the project's real papers |
 | 3. BioMiner on BioVista | A subset of BioVista papers, with BioMiner's built-in evaluation | BioMiner | Check that our installation reproduces the published results |
 
+## Phase 2: stage 3 module (in progress)
+
+In our group pipeline from Assignment 1.4, I own stage 3: recognition (3a) and the Markush branch (3b).
+
+- **Input,** from stage 2 (Jirapa): `data/stage2/gated_manifest.csv`, one row per crop with `paper_id, page, crop_id, crop_path` and a gate `label` (molecule, markush, or not_molecule).
+- **Output,** read by stage 4 (Hinal): `results/stage3/predictions_molscribe.csv` and `results/stage3/markush_compounds.csv`, in the column formats agreed in Assignment 1.4.
+
+Run it with `python run_pipeline.py --steps stage3`. Until the gate is ready, `python scripts/make_stand_in_manifest.py` builds a stand-in manifest from the DECIMER crops, with every crop labelled molecule.
+
+**Status.** MolScribe recognition runs end to end on gated crops. The Markush branch keeps the scaffold, rewrites DECIMER-style `[R]` placeholders as valid attachment points (`src/markush.py`, tested in `tests/test_markush.py`), and flags the crop. Still to do: expanding R-group tables into full compounds, adding DECIMER and BioMiner as further recognizers in stage 3, and running BioMiner, which needs an API key or large GPUs.
+
 ## Pipeline
 
 ```

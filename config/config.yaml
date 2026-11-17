@@ -27,6 +27,12 @@ paths:
   # the exact same images and compare DECIMER and MolScribe side by side.
   teammate_dir: data/teammate
 
+  # Phase 2: stage 2's gated crop manifest (Jirapa), read by stage 3
+  gated_manifest: data/stage2/gated_manifest.csv
+
+  # Phase 2: stage 3 outputs (this module), read by stage 4 (Hinal)
+  stage3_dir: results/stage3
+
   # All outputs (predictions, metrics, logs) are written here
   results_dir: results
 

@@ -10,6 +10,7 @@ Steps, in order:
   course_biominer    BioMiner end to end on the six course papers
   biovista_biominer  BioMiner end to end on the BioVista subset, checked against published results
   evaluate           score every tool and write the results tables
+  stage3             Phase 2 module: recognition and Markush branch on stage 2's gated crops
 
 Each step runs inside its own environment (set in config/config.yaml), because
 the tools have conflicting dependencies. If a step fails, the remaining steps
@@ -35,6 +36,7 @@ STEPS = {
     "course_biominer": ("biominer", ["-m", "src.run_biominer", "--mode", "course"]),
     "biovista_biominer": ("biominer", ["-m", "src.run_biominer", "--mode", "biovista"]),
     "evaluate": ("scoring", ["-m", "src.evaluate"]),
+    "stage3": ("molscribe", ["-m", "src.stage3"]),
 }
 
 
